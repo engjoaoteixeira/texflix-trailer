@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="robots" content="noindex">
+<title>TexFlix trailer</title>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+  #p, #p iframe { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border: 0; }
+</style>
+</head>
+<body>
+<div id="p"></div>
+<script>
+/*
+ * Leitor de trailers da TexFlix (publicado no GitHub Pages).
+ * O YouTube recusa o leitor numa página sem endereço web (erro 153), como a app instalada na TV;
+ * aqui tem endereço https, e a app mostra esta página num iframe.
+ * Endereço: ?v=<código YouTube de 11 caracteres>
+ * A app envia {cmd:'toggle'} ou {cmd:'seek', d:<segundos>}; a página responde
+ * {tx:'ready'}, {tx:'state', s:<estado>}, {tx:'ended'} ou {tx:'error', code:<código>}.
+ */
+(function () {
+  'use strict';
+  var m = /[?&]v=([\w-]{11})(?:&|$)/.exec(location.search), id = m && m[1], player = null;
+  function tell(o) { o.texflix = 1; try { parent.postMessage(o, '*'); } catch (e) {} }
+  if (!id) { tell({ tx: 'error', code: 'id' }); return; }
+
+  window.onYouTubeIframeAPIReady = function () {
+    player = new YT.Player('p', {
+      videoId: id, width: '100%', height: '100%',
+      playerVars: { autoplay: 1, controls: 0, rel: 0, modestbranding: 1, playsinline: 1, iv_load_policy: 3,
+                    hl: 'pt', cc_lang_pref: 'pt', disablekb: 1, fs: 0 },
+      events: {
+        onReady: function (e) { e.target.playVideo(); tell({ tx: 'ready' }); },
+        onStateChange: function (e) { tell({ tx: 'state', s: e.data }); if (e.data === 0) tell({ tx: 'ended' }); },
+        onError: function (e) { tell({ tx: 'error', code: e && e.data }); }
+      }
+    });
+  };
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!player || !d || typeof d !== 'object' || !player.getPlayerState) return;
+    if (d.cmd === 'toggle') { if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo(); }
+    else if (d.cmd === 'seek' && typeof d.d === 'number') player.seekTo(Math.max(0, player.getCurrentTime() + d.d), true);
+  });
+
+  var s = document.createElement('script');
+  s.src = 'https://www.youtube.com/iframe_api';
+  s.onerror = function () { tell({ tx: 'error', code: 'api' }); };
+  document.head.appendChild(s);
+})();
+</script>
+</body>
+</html>
